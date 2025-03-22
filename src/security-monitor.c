@@ -1,5 +1,6 @@
 #include <stdio.h>                                      // Biblioteca padrão do C
 #include "pico/stdlib.h"                                // Biblioteca padrão do SDK do Raspberry Pi Pico W
+#include "hardware/adc.h"
 #include "hardware/timer.h"                             // Biblioteca para interrupções de timer
 #include "utils/wifi/wifi.h"                            // Funções para conexão Wi-Fi
 #include "utils/client http/server_connection.h"        // Funções para comunicação com o servidor
@@ -16,12 +17,17 @@
 #define PIN_BTN_B 6            // Pino do botão B
 #define PIN_BTN_A 5            // Pino do botão A
 
+// Pinos do Joystick
+#define EIXO_Y 26
+#define BTN_SW 22
+
 // Variáveis globais de controle
 bool wifi_is_connected = false;
 bool sensor_is_active = false;
 bool button_is_active = false;
 bool buzzer_is_active = false;
-const int delay_sensor = 5;     // Tempo de espera antes de reativar o sensor (em segundos)
+bool edit_delay_mode_is_on = false;
+int delay_sensor = 5;     // Tempo de espera antes de reativar o sensor (em segundos)
 
 // Estruturas para controle dos timers
 struct repeating_timer timer;
@@ -62,13 +68,14 @@ void enable_sensor_interrupt() {
 // Ativa a interrupção do botão B
 void enable_button_interrupt() {
     gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, true);
     button_is_active = true;
 }
 
 // Desativa a interrupção os botões
 void disable_button_interrupt() {
     gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, false);
-    gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, false);
+    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, false);
     button_is_active = false;
 }
 
@@ -104,6 +111,22 @@ void update_display_status() {
     display_show();
 }
 
+// Exibe no dislay o valor do delay do sensor
+void show_delay_value_on_display() {
+    display_clear();
+
+    // preparando mensagem para escrever no display
+    const message[30];
+    snprintf(message, 30, "delay atual: %d", delay_sensor);
+    display_write_text_no_clear(message, 17, 22, 1, 0);
+
+    // informando valor mínimo e máximo
+    display_write_text_no_clear("min: 5  max: 15", 16, 54, 1, 0);
+
+    // exibindo as mensagens no display
+    display_show();
+}
+
 // Callback executado após o tempo de delay_sensor para reativar o sensor
 bool reset_sensor_callback() {
     gpio_put(PIN_BLUE_LED, 0);   // Desliga o LED
@@ -116,10 +139,14 @@ bool reset_sensor_callback() {
 // Callback para exibir contagem regressiva no display após detecção de presença
 bool display_presence_detected_callback() {
     display_clear();
-    static int current_second = delay_sensor;
+    static int current_second = 0;
+
+    if (current_second == 0) {
+        current_second = delay_sensor;
+    }
 
     // escreve mensagem de alerta no display
-    display_write_text_no_clear("Presença Detectada!", 9, 0, 1, 0);
+    display_write_text_no_clear("Presenca Detectada!", 9, 0, 1, 0);
     display_write_text_no_clear("Enviando Alerta", 16, 15, 1, 0);
 
     // escreve cronômetro regressivo no display
@@ -135,6 +162,24 @@ bool display_presence_detected_callback() {
         return false;
     }
 
+    return true;
+}
+
+bool adc_callback() {
+    
+    // obtendo o valor atual do eixo y do joystick
+    adc_select_input(0);
+    uint16_t eixo_x_value = adc_read();
+
+    // ajustando delay de acordo com o movimento do joystick
+    if (eixo_x_value > 2500 && delay_sensor <15) {
+        delay_sensor++;
+    }
+    else if(eixo_x_value < 1500 && delay_sensor >5) {
+        delay_sensor--;
+    }
+
+    show_delay_value_on_display();
     return true;
 }
 
@@ -194,6 +239,31 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         buzzer_is_active = !buzzer_is_active;
         update_display_status();
     }
+
+    // botão SW foi pressionado
+    if (gpio_pin == BTN_SW && button_is_active) {
+        edit_delay_mode_is_on = !edit_delay_mode_is_on;
+
+        if (!edit_delay_mode_is_on) {
+            update_display_status();
+        }
+
+        disable_button_interrupt();   // Desativa temporariamente o botão (evita boucing)
+
+        // evitando conflitos de timers
+        cancel_repeating_timer(&timer);
+        cancel_repeating_timer(&timer2);
+        cancel_repeating_timer(&timer3);
+
+        // adiciona timer para reativar os botões em 300ms
+        add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
+
+        if (edit_delay_mode_is_on) {
+            disable_sensor_interrupt();
+            add_repeating_timer_ms(300, adc_callback, NULL, &timer);
+        }
+
+    }
 }
 
 // Configuração inicial dos sensores e atuadores
@@ -209,7 +279,6 @@ void setup() {
     // inicializa sensor PIR HC-SR501
     gpio_init(SENSOR_PIN);
     gpio_set_dir(SENSOR_PIN, GPIO_IN);
-    // sensor_is_active = true;
 
     // inicializa o botão B
     gpio_init(PIN_BTN_B);
@@ -222,10 +291,20 @@ void setup() {
     gpio_set_dir(PIN_BTN_A, GPIO_IN);
     gpio_pull_up(PIN_BTN_A); // Configura pull-up interno
 
+    // inicializa o botão A
+    gpio_init(BTN_SW);
+    gpio_set_dir(BTN_SW, GPIO_IN);
+    gpio_pull_up(BTN_SW); // Configura pull-up interno
+
+    // configurando o adc
+    adc_init();
+    adc_gpio_init(EIXO_Y);
+
     // configura interrupções para o sensor e botão
     gpio_set_irq_enabled_with_callback(SENSOR_PIN, GPIO_IRQ_EDGE_RISE, true, &handle_gpio_interrupt);
     gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, true);
     gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(BTN_SW, GPIO_IRQ_EDGE_FALL, true);
 }
 
 int main() {

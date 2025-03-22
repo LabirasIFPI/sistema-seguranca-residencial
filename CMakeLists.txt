@@ -55,6 +55,7 @@ target_link_libraries(security-monitor
     pico-ssd1306
     pico_stdlib
     hardware_pwm
+    hardware_adc
 )
 
 # Add the standard include files to the build
