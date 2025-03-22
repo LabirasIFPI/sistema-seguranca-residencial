@@ -31,7 +31,7 @@ void buzzer_beep() {
     uint slice_num = pwm_gpio_to_slice_num(BUZZER_PIN);
 
     // configurar o duty cycle para 50% (ativo)
-    pwm_set_gpio_level(BUZZER_PIN, 521);
+    pwm_set_gpio_level(BUZZER_PIN, 4090);
 }
 
 void buzzer_stop_beep() {

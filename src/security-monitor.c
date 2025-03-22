@@ -7,18 +7,20 @@
 #include "utils/buzzer/buzzer.h"                        // Funções para a manipulaçõa do BUZZER
 
 // Credenciais de Wi-Fi
-#define WIFI_SSID "Cardoso"
-#define WIFI_PASS "xamazintos"
+#define WIFI_SSID "MARIA JULIA"
+#define WIFI_PASS "medjugorje"
 
 // Pinos GPIO
 #define SENSOR_PIN 18          // Pino do sensor de proximidade
 #define PIN_BLUE_LED 12        // Pino do LED azul
 #define PIN_BTN_B 6            // Pino do botão B
+#define PIN_BTN_A 5            // Pino do botão A
 
 // Variáveis globais de controle
 bool wifi_is_connected = false;
 bool sensor_is_active = false;
 bool button_is_active = false;
+bool buzzer_is_active = false;
 const int delay_sensor = 5;     // Tempo de espera antes de reativar o sensor (em segundos)
 
 // Estruturas para controle dos timers
@@ -63,8 +65,9 @@ void enable_button_interrupt() {
     button_is_active = true;
 }
 
-// Desativa a interrupção do botão B
+// Desativa a interrupção os botões
 void disable_button_interrupt() {
+    gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, false);
     gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, false);
     button_is_active = false;
 }
@@ -77,18 +80,27 @@ bool reenable_button_callback() {
 
 // Atualiza o status no display OLED
 void update_display_status() {
+
+    // limpa todo o conteúdo atual no display
     display_clear();
 
+    // status do wifi
     const char *connected_msg = wifi_is_connected ? "Wi-Fi: CONECTADO" : "Wi-Fi: DESCONECTADO";
     display_write_text_no_clear(connected_msg, 0, 0, 1, 0);
 
+    // status do sensor
     const char *sensor_msg = sensor_is_active ? "Sensor: LIGADO" : "Sensor: DESLIGADO";
     display_write_text_no_clear(sensor_msg, 0, 12, 1, 0);
 
-    const char *button_msg = sensor_is_active ? "DESATIVAR sensor" : "ATIVAR o sensor";
-    display_write_text_no_clear("Pressione B para:", 12, 42, 1, 0);
-    display_write_text_no_clear(button_msg, 14, 54, 1, 0);
+    // indicação de alteração do modo de operação
+    const char *button_a_msg =  buzzer_is_active ? "A: desativar buzzer" : "A: ativar buzzer";
+    display_write_text_no_clear(button_a_msg, 0, 44, 1, 0);
 
+    // indicativo de alteração de status do sensor
+    const char *button_b_msg = sensor_is_active ? "B: desativar sensor" : "B: ativar sensor";
+    display_write_text_no_clear(button_b_msg, 0, 54, 1, 0);
+
+    // desenha todo o conteúdo no display
     display_show();
 }
 
@@ -128,16 +140,18 @@ bool display_presence_detected_callback() {
 
 // Callback para tratar interrupções dos GPIOs
 void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
+
+    // sensor gerou sinal
     if (gpio_pin == SENSOR_PIN && sensor_is_active) {
         gpio_put(PIN_BLUE_LED, 1);          // Acende o LED azul    
-        buzzer_beep();                      // Toca beep do buzzer
+        if (buzzer_is_active) buzzer_beep();// Toca beep do buzzer
         disable_sensor_interrupt();         // Desativa temporariamente o sensor
         disable_button_interrupt();         // Desativa temporariamente o botão
 
         if (wifi_is_connected) {
             create_alert("DETECTED", "S01");    // Envia alerta ao servidor
         }
-
+        
         // evitando conflitos de timers
         cancel_repeating_timer(&timer);
         cancel_repeating_timer(&timer2);
@@ -147,6 +161,7 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         add_repeating_timer_ms(delay_sensor * 1000, reset_sensor_callback, NULL, &timer);
     }
 
+    // botão B foi pressionado
     if (gpio_pin == PIN_BTN_B && button_is_active) {
         disable_button_interrupt();   // Desativa temporariamente o botão (evita bouncing)
 
@@ -155,9 +170,28 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         cancel_repeating_timer(&timer2);
         cancel_repeating_timer(&timer3);
 
+        // adiciona timer para rativar os botões em 300ms
         add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
 
+        // alterna o estado do sensor
         sensor_is_active ? disable_sensor_interrupt() : enable_sensor_interrupt();
+        update_display_status();
+    }
+
+    // botão A foi pressionado
+    if (gpio_pin == PIN_BTN_A && button_is_active) {
+        disable_button_interrupt();   // Desativa temporariamente o botão (evita boucing)
+
+        // evitando conflitos de timers
+        cancel_repeating_timer(&timer);
+        cancel_repeating_timer(&timer2);
+        cancel_repeating_timer(&timer3);
+
+        // adiciona timer para reativar os botões em 300ms
+        add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
+
+        // alterna o estado do buzzer
+        buzzer_is_active = !buzzer_is_active;
         update_display_status();
     }
 }
@@ -175,7 +209,7 @@ void setup() {
     // inicializa sensor PIR HC-SR501
     gpio_init(SENSOR_PIN);
     gpio_set_dir(SENSOR_PIN, GPIO_IN);
-    sensor_is_active = true;
+    // sensor_is_active = true;
 
     // inicializa o botão B
     gpio_init(PIN_BTN_B);
@@ -183,9 +217,15 @@ void setup() {
     gpio_pull_up(PIN_BTN_B); // Configura pull-up interno
     button_is_active = true;
 
+    // inicializa o botão A
+    gpio_init(PIN_BTN_A);
+    gpio_set_dir(PIN_BTN_A, GPIO_IN);
+    gpio_pull_up(PIN_BTN_A); // Configura pull-up interno
+
     // configura interrupções para o sensor e botão
     gpio_set_irq_enabled_with_callback(SENSOR_PIN, GPIO_IRQ_EDGE_RISE, true, &handle_gpio_interrupt);
     gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, true);
 }
 
 int main() {
@@ -195,8 +235,8 @@ int main() {
     sleep_ms(2000);             // Aguarda um tempo antes de iniciar
     connect_to_wifi();          // Conecta ao Wi-Fi
     setup();                    // Configura sensores e atuadores
+    sleep_ms(1000);
     update_display_status();
-    sleep_ms(1000);             // Tempo para estabilização do sensor
 
     while (true) {
         sleep_ms(10);           // Pequeno delay para evitar sobrecarga do processador

@@ -42,7 +42,7 @@ pico_set_program_version(security-monitor "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(security-monitor 0)
-pico_enable_stdio_usb(security-monitor 0)
+pico_enable_stdio_usb(security-monitor 1)
 
 # includ the library path
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/libs/pico-ssd1306")

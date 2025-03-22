@@ -8,9 +8,9 @@
 #include "lwip/api.h"
 
 // configurações do servidor
-#define SERVER_IP "192.168.173.147";
+#define SERVER_IP "10.0.0.109";
 #define SERVER_PORT 8080
-int server_ip_address[] = {192, 168, 173, 147};
+int server_ip_address[] = {10, 0, 0, 109};
 
 // callback para tratar da resposta do servidor
 err_t tcp_client_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
