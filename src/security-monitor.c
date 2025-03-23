@@ -139,12 +139,21 @@ bool reset_sensor_callback() {
     return false;                // Retorna false para não ser chamada novamente   
 }
 
-// Callback para exibir contagem regressiva no display após detecção de presença
+/*
+* Callback para exibir contagem regressiva no display após detecção de presença
+*/
 bool display_presence_detected_callback() {
     display_clear();
-    static int current_second = 0;
+    static int current_second = -1;
+    
+    // garantindo que o cronômetro sempre use o valor atualizado do delay
+    static int last_delay_time = 5;
+    if (delay_sensor != last_delay_time){
+        current_second = delay_sensor;
+        last_delay_time = delay_sensor;
+    }
 
-    if (current_second == 0) {
+    if (current_second == -1) {
         current_second = delay_sensor;
     }
 
@@ -154,12 +163,12 @@ bool display_presence_detected_callback() {
 
     // escreve cronômetro regressivo no display
     char timer_msg[20];
-    snprintf(timer_msg, sizeof(timer_msg), "Voltando em: %d...", --current_second);
+    snprintf(timer_msg, sizeof(timer_msg), "Voltando em: %d...", --current_second+1);
     display_write_text_no_clear(timer_msg, 16, 55, 1, 0);
     display_show();
 
     // se o cronômetro chegou ao final
-    if (current_second == 1) {
+    if (current_second == 0) {
         current_second = delay_sensor;
         button_enable_interrupt();
         button_is_active = true;
@@ -212,7 +221,7 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
         // ativando interrupções para tela de alerta e para resetar os dispositivos após o delay
         add_repeating_timer_ms(1000, display_presence_detected_callback, NULL, &timer2);
-        add_repeating_timer_ms(delay_sensor * 1000, reset_sensor_callback, NULL, &timer);
+        add_repeating_timer_ms((delay_sensor+1) * 1000, reset_sensor_callback, NULL, &timer);
     }
 
     // botão B foi pressionado
