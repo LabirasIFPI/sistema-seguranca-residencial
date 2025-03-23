@@ -5,6 +5,7 @@
 #include "utils/wifi/wifi.h"                            // Funções para conexão Wi-Fi
 #include "utils/client http/server_connection.h"        // Funções para comunicação com o servidor
 #include "utils/display/display.h"                      // Funções para controle do display OLED
+#include "utils/led/led.h"                              // Funções para controle do led
 #include "utils/buzzer/buzzer.h"                        // Funções para a manipulaçõa do BUZZER
 #include "utils/joystick/joystick.h"                    // Funções para a manipulação do JOYSTICK
 
@@ -14,7 +15,6 @@
 
 // Pinos GPIO
 #define SENSOR_PIN 18          // Pino do sensor de proximidade
-#define PIN_BLUE_LED 12        // Pino do LED azul
 #define PIN_BTN_B 6            // Pino do botão B
 #define PIN_BTN_A 5            // Pino do botão A
 
@@ -126,11 +126,11 @@ void show_delay_value_on_display() {
 
 // Callback executado após o tempo de delay_sensor para reativar o sensor
 bool reset_sensor_callback() {
-    gpio_put(PIN_BLUE_LED, 0);   // Desliga o LED
+    led_turn_off();              // Desliga o LED
     buzzer_stop_beep();          // Desliga o beep do buzzer
     enable_sensor_interrupt();   // Reativa o sensor
-    update_display_status();
-    return false;
+    update_display_status();     // Coloca no display o a tela padrão de status
+    return false;                // Retorna false para não ser chamada novamente   
 }
 
 // Callback para exibir contagem regressiva no display após detecção de presença
@@ -185,10 +185,10 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
     // sensor gerou sinal
     if (gpio_pin == SENSOR_PIN && sensor_is_active) {
-        gpio_put(PIN_BLUE_LED, 1);          // Acende o LED azul    
-        if (buzzer_is_active) buzzer_beep();// Toca beep do buzzer
-        disable_sensor_interrupt();         // Desativa temporariamente o sensor
-        disable_button_interrupt();         // Desativa temporariamente o botão
+        led_turn_on();                        // Acende o LED azul    
+        if (buzzer_is_active) buzzer_beep();  // Toca beep do buzzer
+        disable_sensor_interrupt();           // Desativa temporariamente o sensor
+        disable_button_interrupt();           // Desativa temporariamente o botão
 
         if (wifi_is_connected) {
             create_alert("DETECTED", "S01");    // Envia alerta ao servidor
@@ -267,8 +267,7 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 void setup() {
 
     // inicializa o led azul
-    gpio_init(PIN_BLUE_LED);
-    gpio_set_dir(PIN_BLUE_LED, GPIO_OUT);
+    led_init();
 
     // inicializa o buzzer
     buzzer_init();
