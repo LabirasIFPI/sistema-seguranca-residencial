@@ -6,6 +6,7 @@
 #include "utils/client http/server_connection.h"        // Funções para comunicação com o servidor
 #include "utils/display/display.h"                      // Funções para controle do display OLED
 #include "utils/buzzer/buzzer.h"                        // Funções para a manipulaçõa do BUZZER
+#include "utils/joystick/joystick.h"                    // Funções para a manipulação do JOYSTICK
 
 // Credenciais de Wi-Fi
 #define WIFI_SSID "MARIA JULIA"
@@ -16,10 +17,6 @@
 #define PIN_BLUE_LED 12        // Pino do LED azul
 #define PIN_BTN_B 6            // Pino do botão B
 #define PIN_BTN_A 5            // Pino do botão A
-
-// Pinos do Joystick
-#define EIXO_Y 26
-#define BTN_SW 22
 
 // Variáveis globais de controle
 bool wifi_is_connected = false;
@@ -165,17 +162,17 @@ bool display_presence_detected_callback() {
     return true;
 }
 
+// Callback usado para alterar o tempo de delay do sensor
 bool adc_callback() {
     
     // obtendo o valor atual do eixo y do joystick
-    adc_select_input(0);
-    uint16_t eixo_x_value = adc_read();
+    uint16_t eixo_y_value = joystick_read_current_value();
 
     // ajustando delay de acordo com o movimento do joystick
-    if (eixo_x_value > 2500 && delay_sensor <15) {
+    if (eixo_y_value > 2500 && delay_sensor <15) {
         delay_sensor++;
     }
-    else if(eixo_x_value < 1500 && delay_sensor >5) {
+    else if(eixo_y_value < 1500 && delay_sensor >5) {
         delay_sensor--;
     }
 
@@ -291,14 +288,8 @@ void setup() {
     gpio_set_dir(PIN_BTN_A, GPIO_IN);
     gpio_pull_up(PIN_BTN_A); // Configura pull-up interno
 
-    // inicializa o botão A
-    gpio_init(BTN_SW);
-    gpio_set_dir(BTN_SW, GPIO_IN);
-    gpio_pull_up(BTN_SW); // Configura pull-up interno
-
-    // configurando o adc
-    adc_init();
-    adc_gpio_init(EIXO_Y);
+    // inicializando o joystick
+    joystick_init();
 
     // configura interrupções para o sensor e botão
     gpio_set_irq_enabled_with_callback(SENSOR_PIN, GPIO_IRQ_EDGE_RISE, true, &handle_gpio_interrupt);
