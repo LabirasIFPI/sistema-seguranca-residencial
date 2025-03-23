@@ -2,6 +2,7 @@
 #include "pico/stdlib.h"                                // Biblioteca padrão do SDK do Raspberry Pi Pico W
 #include "hardware/adc.h"
 #include "hardware/timer.h"                             // Biblioteca para interrupções de timer
+#include "utils/sensor_pir/sensor_pir.h"                // Funções para controle do sensor de presença HC-SR501
 #include "utils/wifi/wifi.h"                            // Funções para conexão Wi-Fi
 #include "utils/client http/server_connection.h"        // Funções para comunicação com o servidor
 #include "utils/display/display.h"                      // Funções para controle do display OLED
@@ -13,9 +14,6 @@
 // Credenciais de Wi-Fi
 #define WIFI_SSID "MARIA JULIA"
 #define WIFI_PASS "medjugorje"
-
-// Pinos GPIO
-#define SENSOR_PIN 18          // Pino do sensor de proximidade
 
 // Variáveis globais de controle
 bool wifi_is_connected = false;
@@ -30,13 +28,16 @@ struct repeating_timer timer;
 struct repeating_timer timer2;
 struct repeating_timer timer3;
 
-// Função para conectar ao Wi-Fi
+/*
+* Função para conectar ao Wi-Fi
+*/
 void connect_to_wifi() {
     display_clear();
     display_write_text("Conectando em:", 23, 20, 1, 0);
     display_write_text_no_clear(WIFI_SSID, 23, 32, 1, 0);
     display_show();
 
+    // caso a conexão se estabeleça com sucesso
     if (connect_wifi(WIFI_SSID, WIFI_PASS) == 0) {
         printf("Wi-Fi conectado\n");
         wifi_is_connected = true;
@@ -49,26 +50,18 @@ void connect_to_wifi() {
     display_show();
 }
 
-// Desativa a interrupção do sensor de proximidade
-void disable_sensor_interrupt() {
-    gpio_set_irq_enabled(SENSOR_PIN, GPIO_IRQ_EDGE_RISE, false);
-    sensor_is_active = false;
-}
-
-// Ativa a interrupção do sensor de proximidade
-void enable_sensor_interrupt() {
-    gpio_set_irq_enabled(SENSOR_PIN, GPIO_IRQ_EDGE_RISE, true);
-    sensor_is_active = true;
-}
-
-// Callback para reativar o botão após um tempo (evita bouncing)
+/*
+* Callback para reativar o botão após um tempo (evita bouncing)
+*/
 bool reenable_button_callback() {
     button_enable_interrupt();
     button_is_active = true;
     return false;
 }
 
-// Atualiza o status no display OLED
+/*
+* Desenha no display o status do WIFI e SENSOR e exibe os indicativos para ativar/desativar dispositivos
+*/
 void update_display_status() {
 
     // limpa todo o conteúdo atual no display
@@ -94,7 +87,9 @@ void update_display_status() {
     display_show();
 }
 
-// Exibe no dislay o valor do delay do sensor
+/*
+* Desenha no dislay o valor do delay do sensor quando alterado
+*/
 void show_delay_value_on_display() {
     display_clear();
 
@@ -110,11 +105,14 @@ void show_delay_value_on_display() {
     display_show();
 }
 
-// Callback executado após o tempo de delay_sensor para reativar o sensor
+/*
+* Callback executado após o tempo de delay_sensor para deslogar dispositivos de alerta e reativar o sensor
+*/
 bool reset_sensor_callback() {
     led_turn_off();              // Desliga o LED
     buzzer_stop_beep();          // Desliga o beep do buzzer
-    enable_sensor_interrupt();   // Reativa o sensor
+    sensor_enable_interrupt();   // Reativa o sensor
+    sensor_is_active = true;
     update_display_status();     // Coloca no display o a tela padrão de status
     return false;                // Retorna false para não ser chamada novamente   
 }
@@ -149,8 +147,10 @@ bool display_presence_detected_callback() {
     return true;
 }
 
-// Callback usado para alterar o tempo de delay do sensor
-bool adc_callback() {
+/*
+* Callback usado para alterar o tempo de delay do sensor
+*/
+bool update_delay_callback() {
     
     // obtendo o valor atual do eixo y do joystick
     uint16_t eixo_y_value = joystick_read_current_value();
@@ -167,12 +167,15 @@ bool adc_callback() {
     return true;
 }
 
-// Callback para tratar interrupções dos GPIOs
+/*
+* Callback para tratar todas as interrupções geradas pelos GPIOs
+*/
 void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
     // sensor gerou sinal
     if (gpio_pin == SENSOR_PIN && sensor_is_active) {
-        disable_sensor_interrupt();           // Desativa temporariamente o sensor
+        sensor_disable_interrupt();           // Desativa temporariamente o sensor
+        sensor_is_active = false;
         button_disable_interrupt();           // Desativa temporariamente o botão
         button_is_active = false;
         led_turn_on();                        // Acende o LED azul    
@@ -205,7 +208,8 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
 
         // alterna o estado do sensor
-        sensor_is_active ? disable_sensor_interrupt() : enable_sensor_interrupt();
+        sensor_is_active ? sensor_disable_interrupt() : sensor_enable_interrupt();
+        sensor_is_active = !sensor_is_active;
         update_display_status();
     }
 
@@ -247,8 +251,9 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
 
         if (edit_delay_mode_is_on) {
-            disable_sensor_interrupt();
-            add_repeating_timer_ms(300, adc_callback, NULL, &timer);
+            sensor_disable_interrupt();
+            sensor_is_active = false;
+            add_repeating_timer_ms(300, update_delay_callback, NULL, &timer);
         }
 
     }
@@ -259,18 +264,13 @@ void setup() {
 
     // inicializa o led azul
     led_init();
-
     // inicializa o buzzer
     buzzer_init();
-
     // inicializa sensor PIR HC-SR501
-    gpio_init(SENSOR_PIN);
-    gpio_set_dir(SENSOR_PIN, GPIO_IN);
-
-    // inicializa o botão B
+    sensor_pir_init();
+    // inicializa o botão A e B
     button_init();
     button_is_active = true;
-
     // inicializando o joystick
     joystick_init();
 
