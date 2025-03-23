@@ -54,6 +54,7 @@ void connect_to_wifi() {
 */
 bool reenable_button_callback() {
     button_enable_interrupt();
+    joystick_enable_interrupt();
     button_is_active = true;
     return false;
 }
@@ -71,7 +72,8 @@ void cancel_timers() {
 * Função reponsável por fazer o deboucing nos botões para evitar falsas leituras
 */
 void debouncing_buttons() {
-    button_disable_interrupt();   // Desativa temporariamente o botão (evita bouncing)
+    button_disable_interrupt();   // Desativa temporariamente os botões A e B (evita bouncing)
+    joystick_disable_interrupt(); // Desativa temporariamnete o botão SW do joystick
     button_is_active = false;
 
     // evitando conflitos de timers
