@@ -6,8 +6,9 @@
 #include "utils/client http/server_connection.h"        // Funções para comunicação com o servidor
 #include "utils/display/display.h"                      // Funções para controle do display OLED
 #include "utils/led/led.h"                              // Funções para controle do led
-#include "utils/buzzer/buzzer.h"                        // Funções para a manipulaçõa do BUZZER
-#include "utils/joystick/joystick.h"                    // Funções para a manipulação do JOYSTICK
+#include "utils/buttons/button.h"                       // Funções para controle dos botões
+#include "utils/buzzer/buzzer.h"                        // Funções para controle do BUZZER
+#include "utils/joystick/joystick.h"                    // Funções para controle do JOYSTICK
 
 // Credenciais de Wi-Fi
 #define WIFI_SSID "MARIA JULIA"
@@ -15,8 +16,6 @@
 
 // Pinos GPIO
 #define SENSOR_PIN 18          // Pino do sensor de proximidade
-#define PIN_BTN_B 6            // Pino do botão B
-#define PIN_BTN_A 5            // Pino do botão A
 
 // Variáveis globais de controle
 bool wifi_is_connected = false;
@@ -62,23 +61,10 @@ void enable_sensor_interrupt() {
     sensor_is_active = true;
 }
 
-// Ativa a interrupção do botão B
-void enable_button_interrupt() {
-    gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, true);
-    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, true);
-    button_is_active = true;
-}
-
-// Desativa a interrupção os botões
-void disable_button_interrupt() {
-    gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, false);
-    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, false);
-    button_is_active = false;
-}
-
 // Callback para reativar o botão após um tempo (evita bouncing)
 bool reenable_button_callback() {
-    enable_button_interrupt();
+    button_enable_interrupt();
+    button_is_active = true;
     return false;
 }
 
@@ -155,7 +141,8 @@ bool display_presence_detected_callback() {
     // se o cronômetro chegou ao final
     if (current_second == 1) {
         current_second = delay_sensor;
-        enable_button_interrupt();
+        button_enable_interrupt();
+        button_is_active = true;
         return false;
     }
 
@@ -185,10 +172,11 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
     // sensor gerou sinal
     if (gpio_pin == SENSOR_PIN && sensor_is_active) {
+        disable_sensor_interrupt();           // Desativa temporariamente o sensor
+        button_disable_interrupt();           // Desativa temporariamente o botão
+        button_is_active = false;
         led_turn_on();                        // Acende o LED azul    
         if (buzzer_is_active) buzzer_beep();  // Toca beep do buzzer
-        disable_sensor_interrupt();           // Desativa temporariamente o sensor
-        disable_button_interrupt();           // Desativa temporariamente o botão
 
         if (wifi_is_connected) {
             create_alert("DETECTED", "S01");    // Envia alerta ao servidor
@@ -205,7 +193,8 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
     // botão B foi pressionado
     if (gpio_pin == PIN_BTN_B && button_is_active) {
-        disable_button_interrupt();   // Desativa temporariamente o botão (evita bouncing)
+        button_disable_interrupt();   // Desativa temporariamente o botão (evita bouncing)
+        button_is_active = false;
 
         // evitando conflitos de timers
         cancel_repeating_timer(&timer);
@@ -222,7 +211,8 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
     // botão A foi pressionado
     if (gpio_pin == PIN_BTN_A && button_is_active) {
-        disable_button_interrupt();   // Desativa temporariamente o botão (evita boucing)
+        button_disable_interrupt();   // Desativa temporariamente o botão (evita boucing)
+        button_is_active = false;
 
         // evitando conflitos de timers
         cancel_repeating_timer(&timer);
@@ -245,7 +235,8 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
             update_display_status();
         }
 
-        disable_button_interrupt();   // Desativa temporariamente o botão (evita boucing)
+        button_disable_interrupt();   // Desativa temporariamente o botão (evita boucing)
+        button_is_active = false;
 
         // evitando conflitos de timers
         cancel_repeating_timer(&timer);
@@ -277,15 +268,8 @@ void setup() {
     gpio_set_dir(SENSOR_PIN, GPIO_IN);
 
     // inicializa o botão B
-    gpio_init(PIN_BTN_B);
-    gpio_set_dir(PIN_BTN_B, GPIO_IN);
-    gpio_pull_up(PIN_BTN_B); // Configura pull-up interno
+    button_init();
     button_is_active = true;
-
-    // inicializa o botão A
-    gpio_init(PIN_BTN_A);
-    gpio_set_dir(PIN_BTN_A, GPIO_IN);
-    gpio_pull_up(PIN_BTN_A); // Configura pull-up interno
 
     // inicializando o joystick
     joystick_init();
