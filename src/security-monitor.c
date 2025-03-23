@@ -1,6 +1,5 @@
 #include <stdio.h>                                      // Biblioteca padrão do C
 #include "pico/stdlib.h"                                // Biblioteca padrão do SDK do Raspberry Pi Pico W
-#include "hardware/adc.h"
 #include "hardware/timer.h"                             // Biblioteca para interrupções de timer
 #include "utils/sensor_pir/sensor_pir.h"                // Funções para controle do sensor de presença HC-SR501
 #include "utils/wifi/wifi.h"                            // Funções para conexão Wi-Fi
@@ -21,7 +20,7 @@ bool sensor_is_active = false;
 bool button_is_active = false;
 bool buzzer_is_active = false;
 bool edit_delay_mode_is_on = false;
-int delay_sensor = 5;     // Tempo de espera antes de reativar o sensor (em segundos)
+int delay_sensor = 5;               // Tempo de espera antes de reativar o sensor (em segundos)
 
 // Estruturas para controle dos timers
 struct repeating_timer timer;
@@ -57,6 +56,29 @@ bool reenable_button_callback() {
     button_enable_interrupt();
     button_is_active = true;
     return false;
+}
+
+/*
+* Função responsável por cancelar timers ativos evitando conflitos
+*/
+void cancel_timers() {
+    cancel_repeating_timer(&timer);
+    cancel_repeating_timer(&timer2);
+    cancel_repeating_timer(&timer3);
+}
+
+/*
+* Função reponsável por fazer o deboucing nos botões para evitar falsas leituras
+*/
+void debouncing_buttons() {
+    button_disable_interrupt();   // Desativa temporariamente o botão (evita bouncing)
+    button_is_active = false;
+
+    // evitando conflitos de timers
+    cancel_timers();
+
+    // adiciona timer para rativar os botões em 300ms
+    add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
 }
 
 /*
@@ -182,32 +204,24 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         if (buzzer_is_active) buzzer_beep();  // Toca beep do buzzer
 
         if (wifi_is_connected) {
-            create_alert("DETECTED", "S01");    // Envia alerta ao servidor
+            create_alert("DETECTED", "S01");  // Envia alerta ao servidor
         }
         
         // evitando conflitos de timers
-        cancel_repeating_timer(&timer);
-        cancel_repeating_timer(&timer2);
-        cancel_repeating_timer(&timer3);
+        cancel_timers();
 
+        // ativando interrupções para tela de alerta e para resetar os dispositivos após o delay
         add_repeating_timer_ms(1000, display_presence_detected_callback, NULL, &timer2);
         add_repeating_timer_ms(delay_sensor * 1000, reset_sensor_callback, NULL, &timer);
     }
 
     // botão B foi pressionado
     if (gpio_pin == PIN_BTN_B && button_is_active) {
-        button_disable_interrupt();   // Desativa temporariamente o botão (evita bouncing)
-        button_is_active = false;
+        
+        // tratando o bouncing
+        debouncing_buttons();
 
-        // evitando conflitos de timers
-        cancel_repeating_timer(&timer);
-        cancel_repeating_timer(&timer2);
-        cancel_repeating_timer(&timer3);
-
-        // adiciona timer para rativar os botões em 300ms
-        add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
-
-        // alterna o estado do sensor
+        // alterna o estado do sensor PIR HC-SR501
         sensor_is_active ? sensor_disable_interrupt() : sensor_enable_interrupt();
         sensor_is_active = !sensor_is_active;
         update_display_status();
@@ -215,40 +229,25 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
     // botão A foi pressionado
     if (gpio_pin == PIN_BTN_A && button_is_active) {
-        button_disable_interrupt();   // Desativa temporariamente o botão (evita boucing)
-        button_is_active = false;
 
-        // evitando conflitos de timers
-        cancel_repeating_timer(&timer);
-        cancel_repeating_timer(&timer2);
-        cancel_repeating_timer(&timer3);
-
-        // adiciona timer para reativar os botões em 300ms
-        add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
+        // tratando o bouncing
+        debouncing_buttons();
 
         // alterna o estado do buzzer
         buzzer_is_active = !buzzer_is_active;
         update_display_status();
     }
 
-    // botão SW foi pressionado
+    // botão SW do joystick foi pressionado
     if (gpio_pin == BTN_SW && button_is_active) {
         edit_delay_mode_is_on = !edit_delay_mode_is_on;
+
+        // tratando o bouncing
+        debouncing_buttons();
 
         if (!edit_delay_mode_is_on) {
             update_display_status();
         }
-
-        button_disable_interrupt();   // Desativa temporariamente o botão (evita boucing)
-        button_is_active = false;
-
-        // evitando conflitos de timers
-        cancel_repeating_timer(&timer);
-        cancel_repeating_timer(&timer2);
-        cancel_repeating_timer(&timer3);
-
-        // adiciona timer para reativar os botões em 300ms
-        add_repeating_timer_ms(300, reenable_button_callback, NULL, &timer3);
 
         if (edit_delay_mode_is_on) {
             sensor_disable_interrupt();
@@ -259,7 +258,9 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
     }
 }
 
-// Configuração inicial dos sensores e atuadores
+/*
+* Função reponsável por inicair os sensores/atuadores e configura as interrupções
+*/
 void setup() {
 
     // inicializa o led azul
@@ -285,10 +286,10 @@ int main() {
     
     stdio_init_all();           // Inicializa a comunicação serial
     display_init();             // Inicializa o display OLED
-    sleep_ms(2000);             // Aguarda um tempo antes de iniciar
+    sleep_ms(2000);             // Tempo para display iniciar
     connect_to_wifi();          // Conecta ao Wi-Fi
     setup();                    // Configura sensores e atuadores
-    sleep_ms(1000);
+    sleep_ms(1000);             // Tempo para os dispositivos se estabilizares
     update_display_status();
 
     while (true) {
