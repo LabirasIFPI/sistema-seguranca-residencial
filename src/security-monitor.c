@@ -184,6 +184,20 @@ bool display_presence_detected_callback() {
 * Callback usado para alterar o tempo de delay do sensor
 */
 bool update_delay_callback() {
+
+    // caso esteja no modo de edição do delay
+    if (edit_delay_mode_is_on) {
+        sensor_is_active = false;
+        sensor_disable_interrupt();
+        joystick_enable_interrupt();
+    }
+    
+    // caso não esteja em modo de edição do delay
+    if (!edit_delay_mode_is_on) {
+        reenable_button_callback();
+        update_display_status();
+        return false;
+    }
     
     // obtendo o valor atual do eixo y do joystick
     uint16_t eixo_y_value = joystick_read_current_value();
@@ -196,6 +210,7 @@ bool update_delay_callback() {
         delay_sensor--;
     }
 
+    // atualiza o display com o valor atual do delay
     show_delay_value_on_display();
     return true;
 }
@@ -224,6 +239,7 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         // ativando interrupções para tela de alerta e para resetar os dispositivos após o delay
         add_repeating_timer_ms(1000, display_presence_detected_callback, NULL, &timer2);
         add_repeating_timer_ms((delay_sensor+1) * 1000, reset_sensor_callback, NULL, &timer);
+        return;
     }
 
     // botão B foi pressionado
@@ -236,6 +252,7 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         sensor_is_active ? sensor_disable_interrupt() : sensor_enable_interrupt();
         sensor_is_active = !sensor_is_active;
         update_display_status();
+        return;
     }
 
     // botão A foi pressionado
@@ -247,25 +264,23 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         // alterna o estado do buzzer
         buzzer_is_active = !buzzer_is_active;
         update_display_status();
+        return;
     }
 
     // botão SW do joystick foi pressionado
-    if (gpio_pin == BTN_SW && button_is_active) {
+    if (gpio_pin == BTN_SW) {
+        
+        // alternando o estado a cada vez que pressiona o botão do joystick
         edit_delay_mode_is_on = !edit_delay_mode_is_on;
 
         // tratando o bouncing
         debouncing_buttons();
 
-        if (!edit_delay_mode_is_on) {
-            update_display_status();
-        }
-
-        if (edit_delay_mode_is_on) {
-            sensor_disable_interrupt();
-            sensor_is_active = false;
-            add_repeating_timer_ms(300, update_delay_callback, NULL, &timer);
-        }
-
+        // iniciando timer para a cada 300ms permitir uma leitura do valor do eixo Y do joystick
+        // e atualizar esse valor no display
+        cancel_timers();
+        add_repeating_timer_ms(300, update_delay_callback, NULL, &timer);
+        return;
     }
 }
 
