@@ -173,6 +173,7 @@ bool display_presence_detected_callback() {
     if (current_second == 0) {
         current_second = delay_sensor;
         button_enable_interrupt();
+        joystick_enable_interrupt();
         button_is_active = true;
         return false;
     }
@@ -224,7 +225,8 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
     if (gpio_pin == SENSOR_PIN && sensor_is_active) {
         sensor_disable_interrupt();           // Desativa temporariamente o sensor
         sensor_is_active = false;
-        button_disable_interrupt();           // Desativa temporariamente o botão
+        button_disable_interrupt();           // Desativa temporariamente os botões A e B
+        joystick_disable_interrupt();         // Desativa temporariamente o botão do joystick
         button_is_active = false;
         led_turn_on();                        // Acende o LED azul    
         if (buzzer_is_active) buzzer_beep();  // Toca beep do buzzer
