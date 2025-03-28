@@ -35,7 +35,17 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(security-monitor src/security-monitor.c )
+add_executable(security-monitor 
+    src/security-monitor.c
+    src/utils/buttons/button.c
+    src/utils/buzzer/buzzer.c
+    src/utils/server_connection/server_connection.c
+    src/utils/display/display.c
+    src/utils/joystick/joystick.c
+    src/utils/led/led.c
+    src/utils/sensor_pir/sensor_pir.c
+    src/utils/wifi/wifi.c
+)
 
 pico_set_program_name(security-monitor "security-monitor")
 pico_set_program_version(security-monitor "0.1")

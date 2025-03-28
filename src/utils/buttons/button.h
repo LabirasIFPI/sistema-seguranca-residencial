@@ -1,3 +1,6 @@
+#ifndef BUTTON_H
+#define BUTTON_H
+
 #include "pico/stdlib.h"
 
 // pinos dos botões
@@ -7,30 +10,16 @@
 /*
 * Função responsável por inicializar os botões A e B
 */
-void button_init() {
-    // inicializa o botão A
-    gpio_init(PIN_BTN_A);
-    gpio_set_dir(PIN_BTN_A, GPIO_IN);
-    gpio_pull_up(PIN_BTN_A); // Configura pull-up interno
-
-    // inicializa o botão B
-    gpio_init(PIN_BTN_B);
-    gpio_set_dir(PIN_BTN_B, GPIO_IN);
-    gpio_pull_up(PIN_BTN_B); // Configura pull-up interno
-}
+void button_init();
 
 /*
 * Função para ativar as interrupções dos botões A e B
 */
-void button_enable_interrupt() {
-    gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, true);
-    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, true);
-}
+void button_enable_interrupt();
 
 /*
 * Função para desativar as interrupções dos botões A e B
 */
-void button_disable_interrupt() {
-    gpio_set_irq_enabled(PIN_BTN_B, GPIO_IRQ_EDGE_FALL, false);
-    gpio_set_irq_enabled(PIN_BTN_A, GPIO_IRQ_EDGE_FALL, false);
-}
+void button_disable_interrupt();
+
+#endif

@@ -41,6 +41,7 @@
         "server_connection.h": "c",
         "display.h": "c",
         "buzzer.h": "c",
-        "led.h": "c"
+        "led.h": "c",
+        "sensor_pir.h": "c"
     }
 }

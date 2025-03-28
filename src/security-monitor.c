@@ -3,7 +3,7 @@
 #include "hardware/timer.h"                             // Biblioteca para interrupções de timer
 #include "utils/sensor_pir/sensor_pir.h"                // Funções para controle do sensor de presença HC-SR501
 #include "utils/wifi/wifi.h"                            // Funções para conexão Wi-Fi
-#include "utils/client http/server_connection.h"        // Funções para comunicação com o servidor
+#include "utils/server_connection/server_connection.h"  // Funções para comunicação com o servidor
 #include "utils/display/display.h"                      // Funções para controle do display OLED
 #include "utils/led/led.h"                              // Funções para controle do led
 #include "utils/buttons/button.h"                       // Funções para controle dos botões
