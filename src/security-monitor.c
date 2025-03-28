@@ -9,10 +9,16 @@
 #include "utils/buttons/button.h"                       // Funções para controle dos botões
 #include "utils/buzzer/buzzer.h"                        // Funções para controle do BUZZER
 #include "utils/joystick/joystick.h"                    // Funções para controle do JOYSTICK
+#include <parson.h>
+#include "lwip/tcp.h"
+#include "lwip/netif.h"
 
 // Credenciais de Wi-Fi
-#define WIFI_SSID "MARIA JULIA"
-#define WIFI_PASS "medjugorje"
+#define WIFI_SSID "jotadev"
+#define WIFI_PASS "12345678"
+
+// Definição do servidor local
+#define PORT 8050
 
 // Variáveis globais de controle
 bool wifi_is_connected = false;
@@ -26,6 +32,106 @@ int delay_sensor = 5;               // Tempo de espera antes de reativar o senso
 struct repeating_timer timer;
 struct repeating_timer timer2;
 struct repeating_timer timer3;
+
+/*
+* Função que processa o json que o servidor local recebe e atualiza o estado dos dispositios
+*/
+void process_json(const char *json_str) {
+    // Parse o JSON recebido como string
+    JSON_Value *root_value = json_parse_string(json_str);
+    if (root_value == NULL) {
+        printf("Erro ao parsear JSON\n");
+        return;
+    }
+
+    // Obtendo o objeto JSON
+    JSON_Object *root_object = json_value_get_object(root_value);
+
+    // Obtendo os valores dos campos do JSON
+    int sensor = (int)json_object_get_number(root_object, "sensor");
+    int buzzer = (int)json_object_get_number(root_object, "buzzer");
+    int delay = (int)json_object_get_number(root_object, "delay");
+
+    // Processamento dos valores para ativar/desativar sensor/buzzer e atualizar o delay de leitura
+    sensor_is_active = sensor;
+    buzzer_is_active = buzzer;
+    delay_sensor = delay;
+
+    // ativando ou desativando as interrupções do sensor de acordo com o novo estado
+    sensor_is_active? sensor_enable_interrupt() : sensor_disable_interrupt();
+
+    // atualizando o status dos dipositivos no display
+    update_display_status();
+
+    // Libera a memória
+    json_value_free(root_value);
+}
+
+/*
+* Função callback que receberá os dados quando a conexão for aceita
+*/
+err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+    if (p == NULL) {
+        tcp_close(tpcb);
+        return ERR_OK;
+    }
+
+    char buffer[256];
+    memset(buffer, 0, sizeof(buffer));
+    pbuf_copy_partial(p, buffer, p->len, 0);
+    printf("Recebido JSON: %s\n", buffer);
+
+    process_json(buffer); // Chama a função para processar o JSON
+
+    pbuf_free(p);
+    return ERR_OK;
+}
+
+/*
+* Função callback executada para aceitar conexões
+*/
+err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
+    // Definir a função de recebimento para esta nova conexão
+    tcp_recv(newpcb, recv_callback);
+    return ERR_OK;
+}
+
+/*
+* Função reposável por iniciar o servidor local
+*/
+void start_tcp_server() {
+    struct tcp_pcb *pcb;
+    err_t err;
+
+    // Criar um novo PCB (control block) para o servidor TCP
+    pcb = tcp_new();
+    if (pcb == NULL) {
+        printf("Erro ao criar o PCB TCP.\n");
+        return;
+    }
+
+    // Vincular o servidor ao endereço e porta desejada
+    ip_addr_t ipaddr;
+    IP4_ADDR(&ipaddr, 0, 0, 0, 0);  // Ou use IP_ADDR_ANY para todas as interfaces
+    err = tcp_bind(pcb, &ipaddr, PORT);
+    if (err != ERR_OK) {
+        printf("Erro ao vincular ao endereço e porta.\n");
+        return;
+    }
+
+    // Colocar o servidor para ouvir conexões
+    pcb = tcp_listen(pcb);
+    if (pcb == NULL) {
+        printf("Erro ao colocar o servidor em escuta.\n");
+        return;
+    }
+
+    // Configurar a função de aceitação das conexões
+    tcp_accept(pcb, tcp_accept_callback);
+    printf("Servidor TCP iniciado na porta %d.\n", PORT);
+    uint8_t *ip = get_ip_address();
+    printf("Endereço IP: %d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
+}
 
 /*
 * Função para conectar ao Wi-Fi
@@ -96,8 +202,17 @@ void update_display_status() {
     display_write_text_no_clear(connected_msg, 0, 0, 1, 0);
 
     // status do sensor
-    const char *sensor_msg = sensor_is_active ? "Sensor: LIGADO" : "Sensor: DESLIGADO";
+    const char *sensor_msg = sensor_is_active ? "Sensor:ON" : "Sensor:OFF";
     display_write_text_no_clear(sensor_msg, 0, 12, 1, 0);
+
+    // staus do buzzer
+    const char *buzzer_msg = buzzer_is_active ? "Buzzer:ON" : "Buzzer:OFF";
+    display_write_text_no_clear(buzzer_msg, 68, 12, 1, 0);
+
+    // atual delay
+    const char delay_msg[20];
+    snprintf(delay_msg, 30, "Delay: %d", delay_sensor);
+    display_write_text_no_clear(delay_msg, 0, 24, 1, 0);
 
     // indicação de alteração do modo de operação
     const char *button_a_msg =  buzzer_is_active ? "A: desativar buzzer" : "A: ativar buzzer";
@@ -171,11 +286,11 @@ bool display_presence_detected_callback() {
 
     // se o cronômetro chegou ao final
     if (current_second == 0) {
-        current_second = delay_sensor;
-        button_enable_interrupt();
-        joystick_enable_interrupt();
-        button_is_active = true;
-        return false;
+        current_second = delay_sensor;      // reseta o cronômetro para o valor de delay
+        button_enable_interrupt();          // ativa as interrupções para botões
+        joystick_enable_interrupt();        // ativa as interrupções para o joystick
+        button_is_active = true;            // atualiza o valor da variável de controle
+        return false;                       // retorna falso para a função não ser chamada novamente
     }
 
     return true;
@@ -238,7 +353,7 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
         // evitando conflitos de timers
         cancel_timers();
 
-        // ativando interrupções para tela de alerta e para resetar os dispositivos após o delay
+        // ativando interrupções para tela de alerta e para resetar os dispositivos após o delay finalizar
         add_repeating_timer_ms(1000, display_presence_detected_callback, NULL, &timer2);
         add_repeating_timer_ms((delay_sensor+1) * 1000, reset_sensor_callback, NULL, &timer);
         return;
@@ -291,12 +406,14 @@ void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 */
 void setup() {
 
+    // inicializa sensor PIR HC-SR501
+    sensor_pir_init();
+    // Inicializa o display OLED 
+    display_init();
     // inicializa o led azul
     led_init();
     // inicializa o buzzer
     buzzer_init();
-    // inicializa sensor PIR HC-SR501
-    sensor_pir_init();
     // inicializa o botão A e B
     button_init();
     button_is_active = true;
@@ -313,12 +430,11 @@ void setup() {
 int main() {
     
     stdio_init_all();           // Inicializa a comunicação serial
-    display_init();             // Inicializa o display OLED 
-    sleep_ms(2000);             // Tempo para display iniciar
-    connect_to_wifi();          // Conecta ao Wi-Fi
     setup();                    // Configura sensores e atuadores
-    sleep_ms(1000);             // Tempo para os dispositivos se estabilizares
-    update_display_status();
+    sleep_ms(2000);             // Tempo para os dispositivos se estabilizares
+    connect_to_wifi();          // Conecta ao Wi-Fi
+    start_tcp_server();         // Inicia servidor local
+    update_display_status();    // Atualiza display com o estado dos dispositivos
 
     while (true) {
         sleep_ms(10);           // Pequeno delay para evitar sobrecarga do processador

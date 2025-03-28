@@ -22,3 +22,7 @@ int connect_wifi(const char *ssid, const char *password) {
     printf("Connected.\n");
     return 0;
 }
+
+uint8_t * get_ip_address() {
+    return (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
+}

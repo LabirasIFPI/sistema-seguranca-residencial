@@ -42,6 +42,8 @@
         "display.h": "c",
         "buzzer.h": "c",
         "led.h": "c",
-        "sensor_pir.h": "c"
+        "sensor_pir.h": "c",
+        "timer.h": "c",
+        "tcp.h": "c"
     }
 }

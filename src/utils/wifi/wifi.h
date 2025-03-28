@@ -11,4 +11,9 @@
 */
 int connect_wifi(const char *ssid, const char *password);
 
+/*
+* Função reponsável por retornar o IP da placa
+*/
+uint8_t * get_ip_address();
+
 #endif
