@@ -313,7 +313,7 @@ void setup() {
 int main() {
     
     stdio_init_all();           // Inicializa a comunicação serial
-    display_init();             // Inicializa o display OLED
+    display_init();             // Inicializa o display OLED 
     sleep_ms(2000);             // Tempo para display iniciar
     connect_to_wifi();          // Conecta ao Wi-Fi
     setup();                    // Configura sensores e atuadores

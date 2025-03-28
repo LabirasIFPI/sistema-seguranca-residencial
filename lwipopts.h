@@ -86,4 +86,7 @@
 #define SLIP_DEBUG                  LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
 
+// #define LWIP_NETCONN 1  // Habilita a API Netconn
+#define LWIP_DNS 1      // Habilita suporte a DNS
+
 #endif /* __LWIPOPTS_H__ */
