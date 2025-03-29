@@ -9,9 +9,8 @@
 #include "utils/buttons/button.h"                       // Funções para controle dos botões
 #include "utils/buzzer/buzzer.h"                        // Funções para controle do BUZZER
 #include "utils/joystick/joystick.h"                    // Funções para controle do JOYSTICK
-#include <parson.h>
-#include "lwip/tcp.h"
-#include "lwip/netif.h"
+#include <parson.h>                                     // Biblioteca para trabalhar com JSON
+#include "lwip/tcp.h"                                   // Biblioteca para trabalhar com o TCP
 
 // Credenciais de Wi-Fi
 #define WIFI_SSID "jotadev"
@@ -332,71 +331,102 @@ bool update_delay_callback() {
 }
 
 /*
+ * Trata interrupção do sensor PIR
+ */
+void handle_sensor_interrupt() {
+    if (!sensor_is_active) return;       // Ignora se o sensor não estiver ativo
+
+    sensor_disable_interrupt();          // Desativa temporariamente o sensor
+    sensor_is_active = false;
+    button_disable_interrupt();          // Desativa temporariamente os botões A e B
+    joystick_disable_interrupt();        // Desativa temporariamente o botão do joystick
+    button_is_active = false;
+    
+    led_turn_on();                       // Acende o LED azul
+    if (buzzer_is_active) buzzer_beep(); // Toca beep do buzzer, caso esteja ativo
+
+    if (wifi_is_connected) {
+        create_alert("DETECTED", "S01"); // Envia alerta ao servidor, caso esteja conectado a rede
+    }
+
+    // Evitando conflitos de timers
+    cancel_timers();
+
+    // Ativando interrupções para tela de alerta e para resetar os dispositivos após o delay finalizar
+    add_repeating_timer_ms(1000, display_presence_detected_callback, NULL, &timer2);
+    add_repeating_timer_ms((delay_sensor + 1) * 1000, reset_sensor_callback, NULL, &timer);
+}
+
+/*
+ * Trata interrupção do botão B
+ */
+void handle_button_b_interrupt() {
+    if (!button_is_active) return; // Ignora se os botões estiverem desativados
+
+    debouncing_buttons(); // Tratando bouncing
+
+    // Alterna o estado do sensor PIR HC-SR501
+    sensor_is_active ? sensor_disable_interrupt() : sensor_enable_interrupt();
+    sensor_is_active = !sensor_is_active;
+
+    update_display_status(); // Atualiza a tela com o novo estado
+}
+
+/*
+ * Trata interrupção do botão A
+ */
+void handle_button_a_interrupt() {
+    if (!button_is_active) return; // Ignora se os botões estiverem desativados
+
+    debouncing_buttons(); // Tratando bouncing
+
+    // Alterna o estado do buzzer
+    buzzer_is_active = !buzzer_is_active;
+
+    update_display_status(); // Atualiza a tela com o novo estado
+}
+
+/*
+ * Trata interrupção do botão SW do joystick
+ */
+void handle_joystick_button_interrupt() {
+    // Alternando o estado a cada vez que pressiona o botão do joystick
+    edit_delay_mode_is_on = !edit_delay_mode_is_on;
+
+    debouncing_buttons(); // Tratando bouncing
+
+    // Iniciando timer para, a cada 300ms, permitir uma leitura do valor do eixo Y do joystick
+    // e atualizar esse valor no display
+    cancel_timers();
+    add_repeating_timer_ms(300, update_delay_callback, NULL, &timer);
+}
+
+/*
 * Callback para tratar todas as interrupções geradas pelos GPIOs
 */
 void handle_gpio_interrupt(uint gpio_pin, uint32_t event) {
 
-    // sensor gerou sinal
-    if (gpio_pin == SENSOR_PIN && sensor_is_active) {
-        sensor_disable_interrupt();           // Desativa temporariamente o sensor
-        sensor_is_active = false;
-        button_disable_interrupt();           // Desativa temporariamente os botões A e B
-        joystick_disable_interrupt();         // Desativa temporariamente o botão do joystick
-        button_is_active = false;
-        led_turn_on();                        // Acende o LED azul    
-        if (buzzer_is_active) buzzer_beep();  // Toca beep do buzzer
-
-        if (wifi_is_connected) {
-            create_alert("DETECTED", "S01");  // Envia alerta ao servidor
-        }
-        
-        // evitando conflitos de timers
-        cancel_timers();
-
-        // ativando interrupções para tela de alerta e para resetar os dispositivos após o delay finalizar
-        add_repeating_timer_ms(1000, display_presence_detected_callback, NULL, &timer2);
-        add_repeating_timer_ms((delay_sensor+1) * 1000, reset_sensor_callback, NULL, &timer);
+    // sensor detectou presença
+    if (gpio_pin == SENSOR_PIN) {
+        handle_sensor_interrupt();
         return;
     }
 
     // botão B foi pressionado
-    if (gpio_pin == PIN_BTN_B && button_is_active) {
-        
-        // tratando o bouncing
-        debouncing_buttons();
-
-        // alterna o estado do sensor PIR HC-SR501
-        sensor_is_active ? sensor_disable_interrupt() : sensor_enable_interrupt();
-        sensor_is_active = !sensor_is_active;
-        update_display_status();
+    if (gpio_pin == PIN_BTN_B) {
+        handle_button_b_interrupt();
         return;
     }
 
     // botão A foi pressionado
-    if (gpio_pin == PIN_BTN_A && button_is_active) {
-
-        // tratando o bouncing
-        debouncing_buttons();
-
-        // alterna o estado do buzzer
-        buzzer_is_active = !buzzer_is_active;
-        update_display_status();
+    if (gpio_pin == PIN_BTN_A) {
+        handle_button_a_interrupt();
         return;
     }
 
     // botão SW do joystick foi pressionado
     if (gpio_pin == BTN_SW) {
-        
-        // alternando o estado a cada vez que pressiona o botão do joystick
-        edit_delay_mode_is_on = !edit_delay_mode_is_on;
-
-        // tratando o bouncing
-        debouncing_buttons();
-
-        // iniciando timer para a cada 300ms permitir uma leitura do valor do eixo Y do joystick
-        // e atualizar esse valor no display
-        cancel_timers();
-        add_repeating_timer_ms(300, update_delay_callback, NULL, &timer);
+        handle_joystick_button_interrupt();
         return;
     }
 }
@@ -431,7 +461,7 @@ int main() {
     
     stdio_init_all();           // Inicializa a comunicação serial
     setup();                    // Configura sensores e atuadores
-    sleep_ms(2000);             // Tempo para os dispositivos se estabilizares
+    sleep_ms(2000);             // Tempo para os dispositivos se estabilizarem
     connect_to_wifi();          // Conecta ao Wi-Fi
     start_tcp_server();         // Inicia servidor local
     update_display_status();    // Atualiza display com o estado dos dispositivos
