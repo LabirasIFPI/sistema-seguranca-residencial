@@ -1,16 +1,16 @@
-#include <stdio.h>                                      // Biblioteca padrão do C
-#include "pico/stdlib.h"                                // Biblioteca padrão do SDK do Raspberry Pi Pico W
-#include "hardware/timer.h"                             // Biblioteca para interrupções de timer
-#include "utils/sensor_pir/sensor_pir.h"                // Funções para controle do sensor de presença HC-SR501
-#include "utils/wifi/wifi.h"                            // Funções para conexão Wi-Fi
-#include "utils/server_connection/server_connection.h"  // Funções para comunicação com o servidor
-#include "utils/display/display.h"                      // Funções para controle do display OLED
-#include "utils/led/led.h"                              // Funções para controle do led
-#include "utils/buttons/button.h"                       // Funções para controle dos botões
-#include "utils/buzzer/buzzer.h"                        // Funções para controle do BUZZER
-#include "utils/joystick/joystick.h"                    // Funções para controle do JOYSTICK
-#include <parson.h>                                     // Biblioteca para trabalhar com JSON
-#include "lwip/tcp.h"                                   // Biblioteca para trabalhar com o TCP
+#include <stdio.h>                     // Biblioteca padrão do C
+#include "pico/stdlib.h"               // Biblioteca padrão do SDK do Raspberry Pi Pico W
+#include "hardware/timer.h"            // Biblioteca para interrupções de timer
+#include "sensor_pir.h"                // Funções para controle do sensor de presença HC-SR501
+#include "wifi.h"                      // Funções para conexão Wi-Fi
+#include "server_connection.h"         // Funções para comunicação com o servidor
+#include "display.h"                   // Funções para controle do display OLED
+#include "led.h"                       // Funções para controle do led
+#include "button.h"                    // Funções para controle dos botões
+#include "buzzer.h"                    // Funções para controle do BUZZER
+#include "joystick.h"                  // Funções para controle do JOYSTICK
+#include <parson.h>                    // Biblioteca para trabalhar com JSON
+#include "lwip/tcp.h"                  // Biblioteca para trabalhar com o TCP
 
 // Credenciais de Wi-Fi
 #define WIFI_SSID "jotadev"
@@ -31,6 +31,43 @@ int delay_sensor = 5;               // Tempo de espera antes de reativar o senso
 struct repeating_timer timer;
 struct repeating_timer timer2;
 struct repeating_timer timer3;
+
+/*
+* Desenha no display o status do WIFI e SENSOR e exibe os indicativos para ativar/desativar dispositivos
+*/
+void update_display_status() {
+
+    // limpa todo o conteúdo atual no display
+    display_clear();
+
+    // status do wifi
+    const char *connected_msg = wifi_is_connected ? "Wi-Fi: CONECTADO" : "Wi-Fi: DESCONECTADO";
+    display_write_text_no_clear(connected_msg, 0, 0, 1, 0);
+
+    // status do sensor
+    const char *sensor_msg = sensor_is_active ? "Sensor:ON" : "Sensor:OFF";
+    display_write_text_no_clear(sensor_msg, 0, 12, 1, 0);
+
+    // staus do buzzer
+    const char *buzzer_msg = buzzer_is_active ? "Buzzer:ON" : "Buzzer:OFF";
+    display_write_text_no_clear(buzzer_msg, 68, 12, 1, 0);
+
+    // atual delay
+    char delay_msg[20];
+    snprintf(delay_msg, 30, "Delay: %d", delay_sensor);
+    display_write_text_no_clear(delay_msg, 0, 24, 1, 0);
+
+    // indicação de alteração do modo de operação
+    const char *button_a_msg =  buzzer_is_active ? "A: desativar buzzer" : "A: ativar buzzer";
+    display_write_text_no_clear(button_a_msg, 0, 44, 1, 0);
+
+    // indicativo de alteração de status do sensor
+    const char *button_b_msg = sensor_is_active ? "B: desativar sensor" : "B: ativar sensor";
+    display_write_text_no_clear(button_b_msg, 0, 54, 1, 0);
+
+    // desenha todo o conteúdo no display
+    display_show();
+}
 
 /*
 * Função que processa o json que o servidor local recebe e atualiza o estado dos dispositios
@@ -189,50 +226,13 @@ void debouncing_buttons() {
 }
 
 /*
-* Desenha no display o status do WIFI e SENSOR e exibe os indicativos para ativar/desativar dispositivos
-*/
-void update_display_status() {
-
-    // limpa todo o conteúdo atual no display
-    display_clear();
-
-    // status do wifi
-    const char *connected_msg = wifi_is_connected ? "Wi-Fi: CONECTADO" : "Wi-Fi: DESCONECTADO";
-    display_write_text_no_clear(connected_msg, 0, 0, 1, 0);
-
-    // status do sensor
-    const char *sensor_msg = sensor_is_active ? "Sensor:ON" : "Sensor:OFF";
-    display_write_text_no_clear(sensor_msg, 0, 12, 1, 0);
-
-    // staus do buzzer
-    const char *buzzer_msg = buzzer_is_active ? "Buzzer:ON" : "Buzzer:OFF";
-    display_write_text_no_clear(buzzer_msg, 68, 12, 1, 0);
-
-    // atual delay
-    const char delay_msg[20];
-    snprintf(delay_msg, 30, "Delay: %d", delay_sensor);
-    display_write_text_no_clear(delay_msg, 0, 24, 1, 0);
-
-    // indicação de alteração do modo de operação
-    const char *button_a_msg =  buzzer_is_active ? "A: desativar buzzer" : "A: ativar buzzer";
-    display_write_text_no_clear(button_a_msg, 0, 44, 1, 0);
-
-    // indicativo de alteração de status do sensor
-    const char *button_b_msg = sensor_is_active ? "B: desativar sensor" : "B: ativar sensor";
-    display_write_text_no_clear(button_b_msg, 0, 54, 1, 0);
-
-    // desenha todo o conteúdo no display
-    display_show();
-}
-
-/*
 * Desenha no dislay o valor do delay do sensor quando alterado
 */
 void show_delay_value_on_display() {
     display_clear();
 
     // preparando mensagem para escrever no display
-    const message[30];
+    char message[30];
     snprintf(message, 30, "delay atual: %d", delay_sensor);
     display_write_text_no_clear(message, 17, 22, 1, 0);
 

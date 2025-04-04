@@ -48,6 +48,7 @@ add_executable(security-monitor
     src/utils/buttons/button.c
     src/utils/buzzer/buzzer.c
     src/utils/server_connection/server_connection.c
+    src/utils/ssd1306/ssd1306.c    
     src/utils/display/display.c
     src/utils/joystick/joystick.c
     src/utils/led/led.c
@@ -62,24 +63,30 @@ pico_set_program_version(security-monitor "0.1")
 pico_enable_stdio_uart(security-monitor 0)
 pico_enable_stdio_usb(security-monitor 1)
 
-# includ the library path
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/libs/pico-ssd1306")
-
 # Add the standard library to the build
 target_link_libraries(security-monitor
     hardware_timer
     pico_cyw43_arch_lwip_threadsafe_background
     pico_lwip
-    pico-ssd1306
     pico_stdlib
     hardware_pwm
     hardware_adc
+    hardware_i2c
     parson
 )
 
 # Add the standard include files to the build
 target_include_directories(security-monitor PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/buttons
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/buzzer
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/display
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/joystick
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/led
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/sensor_pir
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/server_connection
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/ssd1306
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/wifi
 )
 
 # Add any user requested libraries
