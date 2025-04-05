@@ -14,7 +14,6 @@
 // definições de PROXY
 #define PROXY_PORT 57140
 #define SERVER_IP "35.212.33.83"
-static const int server_ip_address[] = {35, 212, 33, 83};
 
 /*
 * Função callback para tratar da resposta do servidor

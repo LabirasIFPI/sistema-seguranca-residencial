@@ -26,12 +26,8 @@ void send_alert_to_server(const char *path, char *request_body, const char *type
         return;
     }
 
-    // const char *proxy_host = PROXY_HOST;  // Proxy gerado pelo Railway
-    int proxy_port = PROXY_PORT;          // Porta do proxy
-    const char *host = SERVER_IP;
-
     ip_addr_t server_ip;
-    IP4_ADDR(&server_ip, server_ip_address[0], server_ip_address[1], server_ip_address[2], server_ip_address[3]); // ip from server
+    server_ip.addr = ipaddr_addr(SERVER_IP);
 
     // Conectando ao servidor
     if (tcp_connect(pcb, &server_ip, PROXY_PORT, NULL) != ERR_OK) {
@@ -52,7 +48,7 @@ void send_alert_to_server(const char *path, char *request_body, const char *type
     "\r\n"  // <- Linha separadora obrigatória antes do corpo da requisição
     "%s"
     "\r\n", // <- Certifique-se de finalizar corretamente
-    type_method, path, host, strlen(request_body), request_body);
+    type_method, path, SERVER_IP, strlen(request_body), request_body);
     
     // Enviando a requisição
     if (tcp_write(pcb, request, strlen(request), TCP_WRITE_FLAG_COPY) != ERR_OK) {

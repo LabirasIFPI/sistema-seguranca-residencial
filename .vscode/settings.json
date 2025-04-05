@@ -46,6 +46,7 @@
         "timer.h": "c",
         "tcp.h": "c",
         "netif.h": "c",
-        "ssd1306.h": "c"
+        "ssd1306.h": "c",
+        "parson.h": "c"
     }
 }
