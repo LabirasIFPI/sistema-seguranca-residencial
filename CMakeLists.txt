@@ -33,15 +33,6 @@ project(security-monitor C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Caminho absoluto para o diretório Parson
-set(PARSON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/parson")
-
-# Adiciona o Parson como subdiretório
-add_subdirectory(${PARSON_DIR})
-
-# Inclui o diretório Parson
-include_directories(${PARSON_DIR})
-
 # Add executable. Default name is the project name, version 0.1
 add_executable(security-monitor 
     src/security-monitor.c
@@ -54,6 +45,7 @@ add_executable(security-monitor
     src/utils/led/led.c
     src/utils/sensor_pir/sensor_pir.c
     src/utils/wifi/wifi.c
+    src/utils/parson/parson.c
 )
 
 pico_set_program_name(security-monitor "security-monitor")
@@ -72,7 +64,6 @@ target_link_libraries(security-monitor
     hardware_pwm
     hardware_adc
     hardware_i2c
-    parson
 )
 
 # Add the standard include files to the build
@@ -87,6 +78,7 @@ target_include_directories(security-monitor PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src/utils/server_connection
     ${CMAKE_CURRENT_LIST_DIR}/src/utils/ssd1306
     ${CMAKE_CURRENT_LIST_DIR}/src/utils/wifi
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils/parson
 )
 
 # Add any user requested libraries

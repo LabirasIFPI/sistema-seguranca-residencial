@@ -9,7 +9,7 @@
 #include "button.h"                    // Funções para controle dos botões
 #include "buzzer.h"                    // Funções para controle do BUZZER
 #include "joystick.h"                  // Funções para controle do JOYSTICK
-#include <parson.h>                    // Biblioteca para trabalhar com JSON
+#include "parson.h"                    // Biblioteca para trabalhar com JSON
 #include "lwip/tcp.h"                  // Biblioteca para trabalhar com o TCP
 
 // Credenciais de Wi-Fi
